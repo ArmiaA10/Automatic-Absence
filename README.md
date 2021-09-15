@@ -18,4 +18,4 @@ Step 2: Open Visual Studio and Ejoy coding.
 
 ## Overview
 
-![](https://gfycat.com/fastdazzlingarchaeopteryx)
+![](https://github.com/ArmiaA10/Automatic-Absence/blob/master/Sample.gif)
