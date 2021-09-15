@@ -211,8 +211,8 @@ namespace ModuleCapture.ViewModels
                         {
                             Cv2.Resize(face, face, new OpenCvSharp.Size(256, 256));
                             model.Predict(face, out int label, out double predict);
-                            text = $"Fadhil Ilham {DateTime.Today}";
-                            Cv2.PutText(mat, text, new OpenCvSharp.Point(rect.X, rect.Y - 5), HersheyFonts.HersheyTriplex, 0.5, Scalar.Red);
+                            text = $"Fadhil Ilham {DateTime.Now.ToShortDateString()} | {DateTime.Now.ToShortTimeString()}";
+                            Cv2.PutText(mat, text, new OpenCvSharp.Point(rect.X, rect.Y - 5), HersheyFonts.HersheyTriplex, 0.3, Scalar.Red);
                         }
                         Cv2.Rectangle(mat, rect, Scalar.Red);
                     }
