@@ -1,4 +1,5 @@
-﻿using AutomaticAbsence.Views;
+﻿using AutomaticAbsence.Dialogs;
+using AutomaticAbsence.Views;
 using ModuleCapture;
 using Prism.Ioc;
 using Prism.Modularity;
@@ -6,9 +7,6 @@ using System.Windows;
 
 namespace AutomaticAbsence
 {
-    /// <summary>
-    /// Interaction logic for App.xaml
-    /// </summary>
     public partial class App
     {
         protected override Window CreateShell()
@@ -18,6 +16,7 @@ namespace AutomaticAbsence
 
         protected override void RegisterTypes(IContainerRegistry containerRegistry)
         {
+            containerRegistry.RegisterDialog<AboutDialog, AboutDialogViewModel>();
         }
 
         protected override void ConfigureModuleCatalog(IModuleCatalog moduleCatalog)

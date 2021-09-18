@@ -20,7 +20,7 @@
         <Menu Margin="3,0,3,5" Background="Transparent">
             <MenuItem Header="File" ></MenuItem>
             <MenuItem Header="Help">
-                <MenuItem Header="About" />
+                <MenuItem Header="About" Command="{Binding ShowAboutDialog}" />
             </MenuItem>
         </Menu>
 

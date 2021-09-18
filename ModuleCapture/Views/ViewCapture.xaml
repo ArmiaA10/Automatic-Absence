@@ -37,7 +37,9 @@
                       Text="{Binding NameDevice}"
                       VerticalContentAlignment="Center" />
             <Button Content="Open Video File"
-                    Command="{Binding OpenVideoFile}"/>
+                    Command="{Binding OpenVideoFile}"/>            
+            <Button Content="Add Face"
+                    Command="{Binding AddFace}"/>
         </StackPanel>
 
         <Image Grid.Row="1" 

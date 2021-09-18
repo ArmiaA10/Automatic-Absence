@@ -1,14 +1,19 @@
 ﻿using AutomaticAbsence.Core.Bases;
 using AutomaticAbsence.Core.Configs;
+using AutomaticAbsence.Core.Models;
 using DirectShowLib;
 using Microsoft.Win32;
 using OpenCvSharp;
+using OpenCvSharp.Extensions;
 using OpenCvSharp.Face;
+using OpenCvSharp.Internal.Vectors;
 using OpenCvSharp.WpfExtensions;
 using Prism.Commands;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Drawing;
 using System.IO;
 using System.Threading;
 using System.Windows;
@@ -23,7 +28,13 @@ namespace ModuleCapture.ViewModels
         private readonly VideoCapture _videoCapture;
         private readonly BackgroundWorker _background;
         private readonly Application _application;
-        private readonly CascadeClassifier _cascadeClassifier;
+        private CascadeClassifier _cascadeClassifier;
+        private Mat _currentFrame;
+        private ObservableCollection<Mat> _imageList = new();
+        private readonly List<string> _nameList = new();
+        private readonly List<PersonModel> _people = new();
+        private LBPHFaceRecognizer _recognizer;
+        private readonly List<int> _labelList = new();
         #endregion Private Variable
 
         #region Constructor
@@ -31,10 +42,10 @@ namespace ModuleCapture.ViewModels
         {
             Title = "Module Capture";
             ExecuteRefreshDevice();
+            GetFaceList();
 
             _videoCapture = new();
             _background = new BackgroundWorker { WorkerSupportsCancellation = true };
-            _cascadeClassifier = new(PathConfig.CascadeClassifierPath);
 
             _application = Application.Current;
             _background.DoWork += Background_DoWork;
@@ -157,6 +168,25 @@ namespace ModuleCapture.ViewModels
                 SelectedDevice = 0;
             }
         }
+
+        private DelegateCommand _addFace;
+        public DelegateCommand AddFace =>
+            _addFace ??= new DelegateCommand(ExecuteAddFace).ObservesCanExecute(() => IsCaptureRunning);
+
+        private void ExecuteAddFace()
+        {
+            if (_currentFrame == null)
+            {
+                MessageBox.Show("Face not aviable");
+            }
+            _currentFrame.SaveImage($"{PathConfig.PersonPath} face {_people.Count + 1} {PathConfig.ImageFileExtension}");
+            StreamWriter writer = new(PathConfig.PersonListPath, true);
+            string personName = Microsoft.VisualBasic.Interaction.InputBox("Your Name");
+            writer.WriteLine(string.Format("face{0}:{1}", _people.Count + 1, personName));
+            writer.Close();
+            GetFaceList();
+            MessageBox.Show("Successful.");
+        }
         #endregion Command
 
         #region Private Method
@@ -182,13 +212,65 @@ namespace ModuleCapture.ViewModels
             _videoCapture.Release();
             _application.Dispatcher.Invoke(() => CaptureImage = new(1200, 1600, 96, 96, PixelFormats.Bgra32, null));
         }
+
+        private void GetFaceList()
+        {
+            _cascadeClassifier = new(PathConfig.CascadeClassifierPath);
+            _people.Clear();
+            _labelList.Clear();
+            _nameList.Clear();
+            string line;
+            PersonModel faceInstance = new();
+
+            // Create empty directory / file for face data if it doesn't exist
+            if (!Directory.Exists(PathConfig.PersonPath))
+            {
+                Directory.CreateDirectory(PathConfig.PersonPath);
+            }
+
+            if (!File.Exists(PathConfig.PersonListPath))
+            {
+                string text = "Cannot find face data file:\n\n";
+                text += PathConfig.PersonListPath + "\n\n";
+                text += "If this is your first time running the app, an empty file will be created for you.";
+                MessageBoxResult result = MessageBox.Show(text, "Warning",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                switch (result)
+                {
+                    case MessageBoxResult.OK:
+                        string dirName = Path.GetDirectoryName(PathConfig.PersonListPath);
+                        Directory.CreateDirectory(dirName);
+                        File.Create(PathConfig.PersonListPath).Close();
+                        break;
+                }
+            }
+
+            StreamReader reader = new(PathConfig.PersonListPath);
+            int j = 0;
+            while ((line = reader.ReadLine()) != null)
+            {
+                string[] lineParts = line.Split(':');
+                faceInstance.Face = new Mat(PathConfig.PersonPath + lineParts[0] + PathConfig.ImageFileExtension);
+                faceInstance.Name = lineParts[1];
+                _people.Add(faceInstance);
+            }
+            Mat mat = new("C:\\face 1.bmp");
+            _recognizer = LBPHFaceRecognizer.Create();
+            foreach (var face in _people)
+            {
+                _recognizer.Train(new[] { mat.CvtColor(ColorConversionCodes.BGR2GRAY) }, new[] { 2 });
+                _imageList.Add(face.Face);
+                _nameList.Add(face.Name);
+                _labelList.Add(j++);
+            }
+            reader.Close();
+        }
         #endregion Private Method
 
         #region Grabber
         private void Background_DoWork(object sender, DoWorkEventArgs e)
         {
             var worker = (BackgroundWorker)sender;
-            Mat grayImage = null;
             while (!worker.CancellationPending)
             {
                 var fps = (int)_videoCapture.Fps;
@@ -199,22 +281,18 @@ namespace ModuleCapture.ViewModels
                     {
                         break;
                     }
-                    if (grayImage == null)
-                    {
-                        grayImage = mat.CvtColor(ColorConversionCodes.BGR2GRAY);
-                    }
-                    model.Train(new[] { grayImage }, new[] { 1 });
                     string text;
                     foreach (var rect in _cascadeClassifier.DetectMultiScale(mat, 1.2, 5, HaarDetectionTypes.ScaleImage, new OpenCvSharp.Size(30, 30)))
                     {
-                        using (Mat face = mat.CvtColor(ColorConversionCodes.BGR2GRAY)[rect].Clone())
+                        Cv2.Rectangle(mat, rect, Scalar.Red);
+                        _currentFrame = mat.CvtColor(ColorConversionCodes.BGR2GRAY)[rect].Clone();
+                        Cv2.Resize(_currentFrame, _currentFrame, new OpenCvSharp.Size(200, 200));
+                        if (_imageList.Count > 0)
                         {
-                            Cv2.Resize(face, face, new OpenCvSharp.Size(256, 256));
-                            model.Predict(face, out int label, out double predict);
-                            text = $"Fadhil Ilham {DateTime.Now.ToShortDateString()} | {DateTime.Now.ToShortTimeString()}";
+                            _recognizer.Predict(_currentFrame, out int label, out double predict);
+                            text = $"{_nameList[label - 2]} {DateTime.Now.ToShortDateString()} | {DateTime.Now.ToShortTimeString()}";
                             Cv2.PutText(mat, text, new OpenCvSharp.Point(rect.X, rect.Y - 5), HersheyFonts.HersheyTriplex, 0.3, Scalar.Red);
                         }
-                        Cv2.Rectangle(mat, rect, Scalar.Red);
                     }
                     _application.Dispatcher.Invoke(() => CaptureImage = mat.ToWriteableBitmap()); // Must create and use WriteableBitmap in the same thread(UI Thread).
                 }
